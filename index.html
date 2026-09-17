@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EQUILAB 1789 — Adaptive Literacy Workspace</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- jsPDF Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        navy: { 900: '#0B132B', 800: '#1C2541', 700: '#3A506B' },
+                        gold: { 500: '#D4AF37', 600: '#AA820A', 400: '#F3E5AB' },
+                        parchment: '#FDFBF7',
+                        amber: { 900: '#78350F', 100: '#FEF3C7' }
+                    },
+                    fontFamily: {
+                        serif: ['Cinzel', 'serif'],
+                        mono: ['Courier Prime', 'monospace'],
+                        sans: ['Plus Jakarta Sans', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #1C2541; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #3A506B; border-radius: 3px; }
+        .vocab-word { border-bottom: 2px dashed #D4AF37; cursor: pointer; transition: all 0.2s; background: rgba(212,175,55,0.1); padding: 0 2px; }
+        .vocab-word:hover { background: rgba(212,175,55,0.3); color: #0B132B; }
+        .text-selection-menu { position: absolute; z-index: 50; display: none; }
+        .bg-grid-pattern { background-image: radial-gradient(rgba(212, 175, 55, 0.15) 1px, transparent 0); background-size: 24px 24px; }
+    </style>
+</head>
+<body class="bg-navy-900 text-slate-100 font-sans antialiased min-h-screen flex flex-col selection:bg-gold-500 selection:text-navy-900">
+
+    <!-- LOGIN MODAL / OVERLAY -->
+    <div id="login-overlay" class="fixed inset-0 z-50 bg-navy-900/95 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-navy-800 border-2 border-gold-500/40 rounded-xl p-8 max-w-2xl w-full shadow-2xl bg-grid-pattern">
+            <div class="text-center mb-6">
+                <span class="inline-block px-3 py-1 bg-gold-500/10 text-gold-500 rounded-full text-xs font-mono font-bold tracking-widest uppercase mb-2">RI.11.1 & L.11.4 Workspace</span>
+                <h1 class="font-serif text-3xl font-bold text-gold-400 tracking-wide">EQUILAB 1789</h1>
+                <p class="text-slate-300 text-sm mt-1">Olaudah Equiano Primary Source Adaptive Literacy Engine</p>
+            </div>
+
+            <form id="login-form" class="space-y-4 mb-6">
+                <div>
+                    <label class="block text-xs font-mono text-slate-300 uppercase mb-1">Username</label>
+                    <input type="text" id="input-user" required class="w-full bg-navy-900 border border-navy-700 rounded-lg px-4 py-2.5 text-slate-100 focus:outline-none focus:border-gold-500 font-mono text-sm" placeholder="e.g. dlopez or teacher">
+                </div>
+                <div>
+                    <label class="block text-xs font-mono text-slate-300 uppercase mb-1">Password</label>
+                    <input type="password" id="input-pass" required class="w-full bg-navy-900 border border-navy-700 rounded-lg px-4 py-2.5 text-slate-100 focus:outline-none focus:border-gold-500 font-mono text-sm" placeholder="e.g. equi4104">
+                </div>
+                <div id="login-error" class="text-rose-400 text-xs hidden font-mono">Invalid credentials. Check the quick selector below.</div>
+                <button type="submit" class="w-full bg-gold-500 hover:bg-gold-600 text-navy-900 font-bold py-3 rounded-lg transition-all shadow-lg shadow-gold-500/20 font-serif uppercase tracking-wider">Initialize Session</button>
+            </form>
+
+            <div class="border-t border-navy-700 pt-4">
+                <p class="text-xs font-mono text-slate-400 mb-2 uppercase text-center">Quick Profile Roster (Click to Auto-Fill):</p>
+                <div id="roster-quick-select" class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-40 overflow-y-auto custom-scrollbar p-1">
+                    <!-- Dynamic buttons inserted here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN APP HEADER / HUD -->
+    <header class="bg-navy-800 border-b border-navy-700 sticky top-0 z-30 px-4 py-3 shadow-md">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+            <!-- Left Brand & Profile -->
+            <div class="flex items-center gap-4 w-full md:w-auto justify-between">
+                <div>
+                    <h1 class="font-serif font-bold text-gold-400 text-lg tracking-wider flex items-center gap-2">
+                        EQUILAB 1789 <span class="text-xs px-2 py-0.5 rounded bg-navy-700 text-slate-300 font-mono font-normal">v2.6</span>
+                    </h1>
+                    <p id="hud-user-name" class="text-xs text-slate-300 font-mono">Authenticating...</p>
+                </div>
+                <span id="tier-badge" class="px-2.5 py-1 rounded text-xs font-bold font-mono bg-navy-700 text-gold-400 border border-gold-500/30">Tier --</span>
+            </div>
+
+            <!-- Middle Phase & Timer HUD -->
+            <div class="flex items-center gap-6 bg-navy-900/80 px-4 py-2 rounded-xl border border-navy-700">
+                <div class="text-center">
+                    <span class="block text-[10px] font-mono text-slate-400 uppercase">Session Timer</span>
+                    <span id="session-timer" class="text-lg font-mono font-bold text-gold-400">45:00</span>
+                </div>
+                <div class="h-8 w-px bg-navy-700"></div>
+                <div>
+                    <span class="block text-[10px] font-mono text-slate-400 uppercase">Active Phase</span>
+                    <span id="session-phase" class="text-xs font-semibold text-emerald-400">Phase 1: Vocabulary Scan (0-7m)</span>
+                </div>
+            </div>
+
+            <!-- Right XP & Status -->
+            <div class="flex items-center gap-4 w-full md:w-auto justify-end">
+                <div class="text-right">
+                    <span class="block text-[10px] font-mono text-slate-400 uppercase">Mastery Level</span>
+                    <div class="flex items-center gap-2">
+                        <span id="user-level" class="text-xs font-bold text-slate-200">Analyst</span>
+                        <span id="user-xp" class="text-xs font-mono px-2 py-0.5 bg-gold-500/20 text-gold-400 rounded-full border border-gold-500/30">0 XP</span>
+                    </div>
+                </div>
+                <div id="focus-status" class="flex items-center gap-1.5 px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-mono">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Dynamic Tab Active
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN DUAL-PANE LAB WORKSPACE -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- LEFT PANE: PRIMARY SOURCE READER (7 COLUMNS) -->
+        <section class="lg:col-span-7 flex flex-col bg-parchment text-navy-900 rounded-xl shadow-2xl overflow-hidden border border-gold-500/30">
+            <!-- Reader Header -->
+            <div class="bg-navy-800 text-slate-100 p-4 border-b border-navy-700 flex items-center justify-between">
+                <div>
+                    <span class="text-xs font-mono text-gold-400 uppercase tracking-widest">Primary Source Reader</span>
+                    <h2 class="font-serif font-bold text-base text-amber-100">The Interesting Narrative of the Life of Olaudah Equiano (1789)</h2>
+                </div>
+                <span class="text-xs bg-gold-500/20 text-gold-400 px-2 py-1 rounded font-mono">CCSS RI.11.1</span>
+            </div>
+
+            <!-- Instruction Strip -->
+            <div class="bg-amber-100/80 border-b border-amber-200 px-4 py-2 text-xs font-mono text-amber-900 flex items-center justify-between">
+                <span>💡 <strong>Tip:</strong> Highlight text to capture quotes. Click gold underlined words to launch L.11.4 Vocabulary Workbench.</span>
+            </div>
+
+            <!-- Scrollable Text Body -->
+            <div id="reader-text-container" class="flex-1 p-6 overflow-y-auto space-y-6 custom-scrollbar text-base leading-relaxed font-serif relative">
+                <div class="border-l-4 border-navy-700 pl-4 py-1 italic text-slate-600 text-sm">
+                    <strong>Background:</strong> In his 1789 autobiography, Olaudah Equiano describes his capture in West Africa and the brutal Middle Passage across the Atlantic.
+                </div>
+
+                <div class="excerpt-block bg-white p-4 rounded-lg shadow-sm border border-slate-200" data-section="1">
+                    <span class="text-xs font-mono text-slate-400 block mb-1">SECTION 1 — THE HOLD OF THE SLAVE SHIP</span>
+                    <p>
+                        At last, when the ship we were in had got in all her cargo, they made ready with many fearful noises, and we were all put under deck, so that we could not see how they managed the vessel. The stench of the hold while we were on the coast was so <span class="vocab-word" data-word="loathsome">loathsome</span> that it was intolerable to remain there for any time, and some of us had been permitted to stay on the deck for the fresh air; but now that the whole ship's cargo were confined together, it became absolutely pestilential.
+                    </p>
+                </div>
+
+                <div class="excerpt-block bg-white p-4 rounded-lg shadow-sm border border-slate-200" data-section="2">
+                    <span class="text-xs font-mono text-slate-400 block mb-1">SECTION 2 — SUFFOCATION AND AVARICE</span>
+                    <p>
+                        The closeness of the place, and the heat of the climate, added to the number in the ship, which was so crowded that each had scarcely room to turn himself, almost suffocated us. This produced <span class="vocab-word" data-word="copious">copious</span> perspirations, so that the air soon became unfit for respiration, from a variety of loathsome smells, and brought on a sickness among the slaves, of which many died—thus falling victims to the improvident <span class="vocab-word" data-word="avarice">avarice</span>, as I may call it, of their purchasers.
+                    </p>
+                </div>
+
+                <div class="excerpt-block bg-white p-4 rounded-lg shadow-sm border border-slate-200" data-section="3">
+                    <span class="text-xs font-mono text-slate-400 block mb-1">SECTION 3 — THE CHAINS AND THE FILTH</span>
+                    <p>
+                        This <span class="vocab-word" data-word="wretched">wretched</span> situation was again aggravated by the <span class="vocab-word" data-word="galling">galling</span> of the chains, now become insupportable, and the filth of the necessary tubs, into which the children often fell, and were almost suffocated. The shrieks of the women, and the groans of the dying, rendered the whole a scene of horror almost inconceivable.
+                    </p>
+                </div>
+
+                <div class="excerpt-block bg-white p-4 rounded-lg shadow-sm border border-slate-200" data-section="4">
+                    <span class="text-xs font-mono text-slate-400 block mb-1">SECTION 4 — UNCERTAINTY & DESTINATION</span>
+                    <p>
+                        We were conducted immediately to the merchant's yard, where we were all pent up together like so many sheep in a fold, without any distinction of sex or age. We thought by this we should be eaten by these ugly men, as they appeared to us; and when soon after we were all put down under the deck again, there was much dread and trembling among us, and nothing but bitter cries to be heard all the night from these <span class="vocab-word" data-word="apprehensions">apprehensions</span>.
+                    </p>
+                </div>
+
+                <div class="excerpt-block bg-white p-4 rounded-lg shadow-sm border border-slate-200" data-section="5">
+                    <span class="text-xs font-mono text-slate-400 block mb-1">SECTION 5 — MARITIME OBSERVATIONS</span>
+                    <p>
+                        During our passage, I first saw flying fishes, which surprised me very much; they used frequently to fly across the ship, and many of them fell on the deck. I also now first saw the use of the <span class="vocab-word" data-word="quadrant">quadrant</span>; I had often with astonishment seen the mariners make observations with it, and I could not think what it meant.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- FLOATING CITATION MICRO-MENU -->
+        <div id="selection-menu" class="text-selection-menu bg-navy-800 text-slate-100 p-2 rounded-lg shadow-2xl border border-gold-500/50 flex flex-col gap-1 w-56">
+            <span class="text-[10px] font-mono text-gold-400 uppercase font-bold px-1">Tag Highlighted Quote:</span>
+            <button onclick="addQuoteTag('Explicit Evidence')" class="text-left text-xs px-2 py-1.5 rounded hover:bg-emerald-500/20 hover:text-emerald-300 font-sans transition">
+                🟢 Explicit Evidence
+            </button>
+            <button onclick="addQuoteTag('Inference Anchor')" class="text-left text-xs px-2 py-1.5 rounded hover:bg-sky-500/20 hover:text-sky-300 font-sans transition">
+                🔵 Inference Anchor
+            </button>
+            <button onclick="addQuoteTag('Textual Ambiguity')" class="text-left text-xs px-2 py-1.5 rounded hover:bg-amber-500/20 hover:text-amber-300 font-sans transition">
+                🟡 Textual Ambiguity / Gray Area
+            </button>
+        </div>
+
+        <!-- RIGHT PANE: ACTIVE LAB SIDEBAR (5 COLUMNS) -->
+        <section class="lg:col-span-5 flex flex-col bg-navy-800 rounded-xl shadow-2xl border border-navy-700 overflow-hidden">
+            <!-- Sidebar Navigation Tabs -->
+            <div class="bg-navy-900 p-2 flex gap-1 border-b border-navy-700 font-mono text-xs">
+                <button onclick="switchTab('vocab')" id="tab-btn-vocab" class="tab-btn flex-1 py-2 rounded text-center font-bold bg-navy-800 text-gold-400 border border-gold-500/30">
+                    L.11.4 Lexicon
+                </button>
+                <button onclick="switchTab('evidence')" id="tab-btn-evidence" class="tab-btn flex-1 py-2 rounded text-center font-bold text-slate-400 hover:text-slate-200">
+                    RI.11.1 Quotes
+                </button>
+                <button onclick="switchTab('synthesis')" id="tab-btn-synthesis" class="tab-btn flex-1 py-2 rounded text-center font-bold text-slate-400 hover:text-slate-200">
+                    Analysis
+                </button>
+                <button onclick="switchTab('export')" id="tab-btn-export" class="tab-btn flex-1 py-2 rounded text-center font-bold text-slate-400 hover:text-slate-200">
+                    Portfolio
+                </button>
+            </div>
+
+            <!-- TAB 1: L.11.4 VOCABULARY WORKBENCH -->
+            <div id="tab-vocab" class="tab-content p-5 flex-1 overflow-y-auto custom-scrollbar space-y-4">
+                <div class="bg-navy-900/60 p-3 rounded-lg border border-navy-700">
+                    <h3 class="text-xs font-mono uppercase text-gold-400 font-bold tracking-wider">Strategy-Driven Lexicon Builder</h3>
+                    <p class="text-xs text-slate-300 mt-1">Select any highlighted word in the text or choose one below to analyze context & root clues.</p>
+                </div>
+
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-xs font-mono text-slate-300 mb-1 uppercase">Target Word</label>
+                        <select id="vocab-select" class="w-full bg-navy-900 border border-navy-700 rounded-lg p-2 text-slate-100 text-sm font-mono focus:border-gold-500">
+                            <option value="loathsome">loathsome (Section 1)</option>
+                            <option value="copious">copious (Section 2)</option>
+                            <option value="avarice">avarice (Section 2)</option>
+                            <option value="wretched">wretched (Section 3)</option>
+                            <option value="galling">galling (Section 3)</option>
+                            <option value="apprehensions">apprehensions (Section 4)</option>
+                            <option value="quadrant">quadrant (Section 5)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-mono text-slate-300 mb-1 uppercase">Decoding Strategy (L.11.4)</label>
+                        <select id="vocab-strategy" class="w-full bg-navy-900 border border-navy-700 rounded-lg p-2 text-slate-100 text-sm font-mono focus:border-gold-500">
+                            <option value="Context Clues (Contrast/Tone)">Context Clues (Contrast & Tone)</option>
+                            <option value="Word Parts & Etymology">Word Parts & Roots / Prefix Analysis</option>
+                            <option value="Reference Tools & Synthesis">Reference Tools & In-Context Substitution</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-mono text-slate-300 mb-1 uppercase">Student Definition & Analysis</label>
+                        <textarea id="vocab-def" rows="2" class="w-full bg-navy-900 border border-navy-700 rounded-lg p-2 text-slate-100 text-xs focus:border-gold-500" placeholder="Explain the meaning based on your chosen strategy..."></textarea>
+                    </div>
+
+                    <div id="tier-vocab-extra" class="hidden">
+                        <label class="block text-xs font-mono text-amber-300 mb-1 uppercase">Contextual Application Sentence (Tier 2/3 Extension)</label>
+                        <textarea id="vocab-sentence" rows="2" class="w-full bg-navy-900 border border-navy-700 rounded-lg p-2 text-slate-100 text-xs focus:border-gold-500" placeholder="Write an original sentence applying this word to Equiano's narrative context..."></textarea>
+                    </div>
+
+                    <button onclick="saveVocabEntry()" class="w-full bg-gold-500 hover:bg-gold-600 text-navy-900 font-bold py-2 rounded text-xs font-mono uppercase tracking-wider transition">
+                        Log Word to Micro-Glossary (+50 XP)
+                    </button>
+                </div>
+
+                <!-- Micro-Glossary Ledger -->
+                <div class="mt-6">
+                    <h4 class="text-xs font-mono text-slate-400 uppercase tracking-widest mb-2">Decoded Micro-Glossary (<span id="vocab-count">0</span>)</h4>
+                    <div id="micro-glossary-list" class="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+                        <div class="text-xs text-slate-300 italic p-3 bg-navy-900/40 rounded border border-navy-700/50 text-center">No words decoded yet. Select text or use the form above.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: RI.11.1 EVIDENCE & UNCERTAINTY ENGINE -->
+            <div id="tab-evidence" class="tab-content hidden p-5 flex-1 overflow-y-auto custom-scrollbar space-y-4">
+                <div class="bg-navy-900/60 p-3 rounded-lg border border-navy-700">
+                    <h3 class="text-xs font-mono uppercase text-gold-400 font-bold tracking-wider">RI.11.1 Evidence Matrix</h3>
+                    <p class="text-xs text-slate-300 mt-1">Captured textual citations, inferences, and ambiguous gray areas appear below.</p>
+                </div>
+
+                <div id="evidence-scaffold-banner" class="p-3 rounded bg-gold-500/10 border border-gold-500/30 text-xs font-mono text-gold-300">
+                    <!-- Tier specific instructions loaded dynamically -->
+                </div>
+
+                <div id="captured-quotes-list" class="space-y-3">
+                    <div class="text-xs text-slate-300 italic p-3 bg-navy-900/40 rounded border border-navy-700/50 text-center">
+                        No quotes tagged yet. Highlight any passage in the primary reader to extract evidence.
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: SCAFFOLDED SYNTHESIS & ANALYSIS -->
+            <div id="tab-synthesis" class="tab-content hidden p-5 flex-1 overflow-y-auto custom-scrollbar space-y-4">
+                <div class="bg-navy-900/60 p-3 rounded-lg border border-navy-700">
+                    <h3 class="text-xs font-mono uppercase text-gold-400 font-bold tracking-wider">Metacognitive Synthesis Workbench</h3>
+                    <p class="text-xs text-slate-300 mt-1">Complete your short responses. Sentence frames adapt to your diagnostic profile.</p>
+                </div>
+
+                <!-- Prompt 1 -->
+                <div class="space-y-2 bg-navy-900/40 p-3 rounded border border-navy-700">
+                    <label class="block text-xs font-bold text-slate-200">
+                        Prompt 1: How does Equiano use sensory details to convey the brutality of the slave ship hold?
+                    </label>
+                    <textarea id="prompt-1-input" rows="4" class="w-full bg-navy-900 border border-navy-700 rounded p-2.5 text-xs text-slate-100 focus:border-gold-500 font-sans"></textarea>
+                </div>
+
+                <!-- Prompt 2 -->
+                <div class="space-y-2 bg-navy-900/40 p-3 rounded border border-navy-700">
+                    <label id="prompt-2-label" class="block text-xs font-bold text-slate-200">
+                        Prompt 2: Analyze Equiano's use of the phrase "improvident avarice." What does this reveal about his view of his captors?
+                    </label>
+                    <textarea id="prompt-2-input" rows="4" class="w-full bg-navy-900 border border-navy-700 rounded p-2.5 text-xs text-slate-100 focus:border-gold-500 font-sans"></textarea>
+                </div>
+
+                <button onclick="saveAnalysisResponses()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded text-xs font-mono uppercase tracking-wider transition">
+                    Save Analysis Responses (+100 XP)
+                </button>
+            </div>
+
+            <!-- TAB 4: PORTFOLIO & PDF EXPORT -->
+            <div id="tab-export" class="tab-content hidden p-5 flex-1 overflow-y-auto custom-scrollbar space-y-4">
+                <div class="bg-navy-900/60 p-3 rounded-lg border border-navy-700">
+                    <h3 class="text-xs font-mono uppercase text-gold-400 font-bold tracking-wider">Learning Portfolio & Export</h3>
+                    <p class="text-xs text-slate-300 mt-1">Review your session metrics and generate your official PDF Evidence Receipt.</p>
+                </div>
+
+                <!-- Target Growth Indicator Box -->
+                <div class="bg-navy-900 p-4 rounded-lg border border-navy-700 space-y-3">
+                    <div class="flex items-center justify-between text-xs font-mono">
+                        <span class="text-slate-300">Baseline Benchmark:</span>
+                        <span id="metric-baseline" class="font-bold text-slate-200">0.0%</span>
+                    </div>
+                    <div class="flex items-center justify-between text-xs font-mono">
+                        <span class="text-slate-300">Session Target (+15% Growth Goal):</span>
+                        <span id="metric-target" class="font-bold text-gold-400">0.0%</span>
+                    </div>
+                    <div class="flex items-center justify-between text-xs font-mono">
+                        <span class="text-slate-300">Current Session Projected Score:</span>
+                        <span id="metric-projected" class="font-bold text-emerald-400">0.0%</span>
+                    </div>
+                    <div class="w-full bg-navy-950 rounded-full h-2.5 overflow-hidden border border-navy-700">
+                        <div id="target-progress-bar" class="bg-emerald-400 h-2.5 rounded-full transition-all" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- Rubric Checklist -->
+                <div class="space-y-2">
+                    <h4 class="text-xs font-mono text-slate-400 uppercase tracking-widest">Portfolio Completion Checklist</h4>
+                    <ul class="text-xs space-y-1.5 font-mono">
+                        <li id="check-vocab" class="flex items-center gap-2 text-slate-400">❌ Min. 2 Vocabulary Words Decoded</li>
+                        <li id="check-quotes" class="flex items-center gap-2 text-slate-400">❌ Min. 2 Text Quotes Tagged</li>
+                        <li id="check-analysis" class="flex items-center gap-2 text-slate-400">❌ Analytical Reflections Written</li>
+                    </ul>
+                </div>
+
+                <!-- Export Button -->
+                <button onclick="generatePDFPortfolio()" class="w-full bg-gold-500 hover:bg-gold-600 text-navy-900 font-bold py-3 rounded-lg text-sm font-serif uppercase tracking-wider transition shadow-lg shadow-gold-500/20 flex items-center justify-center gap-2">
+                    📄 Download Evidence Portfolio (PDF)
+                </button>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- JS APP SCRIPT -->
+    <script>
+        // CLASS ROSTER WITH TIERS AND BENCHMARKS
+        const ROSTER = [
+            { key: "afuentes", name: "Fuentes Soto, Andres Sebastian", id: "11104101", tier: 2, pass: "equi4101", base: 79.85, target: 88.35 },
+            { key: "aconcul", name: "Concul Ortiz, Annelisse", id: "11104102", tier: 3, pass: "equi4102", base: 86.35, target: 93.85 },
+            { key: "calvarado", name: "Alvarado Juarez, Carlos Alejandro", id: "11104103", tier: 2, pass: "equi4103", base: 73.79, target: 82.29 },
+            { key: "dlopez", name: "Lopez Monroy, Danilo Andre", id: "22184104", tier: 1, pass: "equi4104", base: 59.31, target: 75.00 },
+            { key: "elara", name: "Lara Valdes, Erick Andres", id: "11104105", tier: 3, pass: "equi4105", base: 88.09, target: 95.59 },
+            { key: "jchojolan", name: "Chojolan Madriz, Juan Ignacio", id: "11104106", tier: 2, pass: "equi4106", base: 82.98, target: 91.48 },
+            { key: "jgonzalez", name: "Gonzalez Vela, Juan Ignacio", id: "11104107", tier: 2, pass: "equi4107", base: 83.85, target: 92.00 },
+            { key: "lvilleda", name: "Villeda Acevedo, Leonel", id: "22184108", tier: 2, pass: "equi4108", base: 84.61, target: 92.00 },
+            { key: "msandoval", name: "Sandoval Mendez, Maite", id: "11104109", tier: 2, pass: "equi4109", base: 83.22, target: 91.72 },
+            { key: "mcastillo", name: "Castillo Peraza, Manuel Sebastian", id: "11104110", tier: 2, pass: "equi4110", base: 74.87, target: 83.37 },
+            { key: "maguilar", name: "Aguilar Carrera, Maria", id: "22184111", tier: 2, pass: "equi4111", base: 82.90, target: 91.40 },
+            { key: "mdonis", name: "Donis Ochoa, Matthew Roger", id: "11104112", tier: 2, pass: "equi4112", base: 80.50, target: 89.00 },
+            { key: "osalas", name: "Salas Munoz, Oscar Alberto", id: "11104113", tier: 2, pass: "equi4113", base: 74.74, target: 83.24 },
+            { key: "prodriguez", name: "Rodriguez Hernandez, Pablo Andre", id: "22184114", tier: 1, pass: "equi4114", base: 66.98, target: 78.50 },
+            { key: "rgirard", name: "Girard Mateo, Raymond Saeed", id: "11104115", tier: 2, pass: "equi4115", base: 79.50, target: 88.00 },
+            { key: "scarballo", name: "Carballo Ponce, Samuel Jesus", id: "11104116", tier: 2, pass: "equi4116", base: 78.43, target: 86.93 },
+            { key: "sgonzalez", name: "Gonzalez Fajardo, Santiago", id: "11104117", tier: 3, pass: "equi4117", base: 86.19, target: 93.69 },
+            { key: "smorales", name: "Morales Morales, Sebastian", id: "22184118", tier: 1, pass: "equi4118", base: 71.10, target: 78.50 },
+            { key: "scastellanos", name: "Castellanos Lopez, Sophia", id: "11104119", tier: 2, pass: "equi4119", base: 74.88, target: 83.38 },
+            { key: "teacher", name: "Barrientos, Yussef (Instructor)", id: "00001789", tier: 3, pass: "admin1789", base: 95.00, target: 100.00 }
+        ];
+
+        // APP STATE
+        let currentUser = null;
+        let userXP = 0;
+        let selectedTextRange = null;
+        let focusStrikes = 0;
+        let timeRemaining = 2700; // 45 mins in seconds
+        let vocabList = [];
+        let quoteList = [];
+
+        // INITIALIZATION
+        window.addEventListener('DOMContentLoaded', () => {
+            initLoginQuickSelect();
+            initTextSelectionHandler();
+            initVocabWordClickers();
+            initFocusMonitor();
+            startTimer();
+        });
+
+        // LOGIN SYSTEM
+        function initLoginQuickSelect() {
+            const container = document.getElementById('roster-quick-select');
+            ROSTER.slice(0, 19).forEach(s => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'text-left p-1.5 rounded bg-navy-900 border border-navy-700 hover:border-gold-500 text-[11px] font-mono text-slate-300 truncate transition';
+                btn.innerHTML = `<span class="text-gold-400 font-bold">T${s.tier}</span> ${s.name.split(',')[0]}`;
+                btn.onclick = () => {
+                    document.getElementById('input-user').value = s.key;
+                    document.getElementById('input-pass').value = s.pass;
+                };
+                container.appendChild(btn);
+            });
+
+            document.getElementById('login-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const u = document.getElementById('input-user').value.trim();
+                const p = document.getElementById('input-pass').value.trim();
+                const found = ROSTER.find(r => r.key.toLowerCase() === u.toLowerCase() && r.pass === p);
+                
+                if (found) {
+                    currentUser = found;
+                    document.getElementById('login-overlay').classList.add('hidden');
+                    setupUserSession();
+                } else {
+                    document.getElementById('login-error').classList.remove('hidden');
+                }
+            });
+        }
+
+        function setupUserSession() {
+            document.getElementById('hud-user-name').textContent = `${currentUser.name} (ID: ${currentUser.id})`;
+            document.getElementById('tier-badge').textContent = `Tier ${currentUser.tier}: ${currentUser.tier === 1 ? 'Guided Support' : currentUser.tier === 2 ? 'Core Analysis' : 'Mastery & Ambiguity'}`;
+            
+            // Tier-specific UI adaptations
+            const extraVocab = document.getElementById('tier-vocab-extra');
+            const scaffoldBanner = document.getElementById('evidence-scaffold-banner');
+            const prompt1 = document.getElementById('prompt-1-input');
+            const prompt2 = document.getElementById('prompt-2-input');
+
+            if (currentUser.tier === 1) {
+                extraVocab.classList.add('hidden');
+                scaffoldBanner.innerHTML = `<strong>Tier 1 Scaffolding:</strong> Use the pre-filled sentence frames below when writing inferences to ensure evidence pairing.`;
+                prompt1.value = "Equiano uses sensory details like 'pestilential smell' and 'groans of the dying' to show... This highlights that...";
+                prompt2.value = "The phrase 'improvident avarice' means reckless greed. Equiano uses this to show that the purchasers cared more about profit than...";
+            } else if (currentUser.tier === 2) {
+                extraVocab.classList.remove('hidden');
+                scaffoldBanner.innerHTML = `<strong>Tier 2 Requirement:</strong> Each inference must be supported by at least two distinct textual quotes.`;
+                prompt1.placeholder = "Analyze how physical and auditory sensory details reinforce Equiano's central argument...";
+                prompt2.placeholder = "Explain how 'improvident avarice' functions as both a moral critique and an economic paradox...";
+            } else {
+                extraVocab.classList.remove('hidden');
+                scaffoldBanner.innerHTML = `<strong>Tier 3 Ambiguity Challenge:</strong> Isolate passages where Equiano leaves matters open-ended or unresolved. Analyze the author's intentional ambiguity.`;
+                document.getElementById('prompt-2-label').textContent = "Prompt 2: Analyze Equiano's discussion of European technology (e.g., the quadrant). How does this introduce thematic ambiguity regarding civilization vs. cruelty?";
+                prompt1.placeholder = "Synthesize sensory imagery with Equiano's broader rhetoric regarding human dignity...";
+                prompt2.placeholder = "Evaluate how Equiano navigates tension between technological wonder and moral critique...";
+            }
+
+            // Portfolio metrics setup
+            document.getElementById('metric-baseline').textContent = `${currentUser.base}%`;
+            document.getElementById('metric-target').textContent = `${currentUser.target}%`;
+            updateProjectedScore();
+        }
+
+        // TIMER & PHASE MONITOR
+        function startTimer() {
+            setInterval(() => {
+                if (timeRemaining > 0) {
+                    timeRemaining--;
+                    const mins = Math.floor(timeRemaining / 60);
+                    const secs = timeRemaining % 60;
+                    document.getElementById('session-timer').textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                    
+                    // Phase Tracking
+                    const phaseElem = document.getElementById('session-phase');
+                    if (timeRemaining > 2280) {
+                        phaseElem.textContent = "Phase 1: Vocabulary Scan (0-7m)";
+                        phaseElem.className = "text-xs font-semibold text-emerald-400";
+                    } else if (timeRemaining > 1080) {
+                        phaseElem.textContent = "Phase 2: Active Read & Evidence Tagging (7-27m)";
+                        phaseElem.className = "text-xs font-semibold text-sky-400";
+                    } else if (timeRemaining > 420) {
+                        phaseElem.textContent = "Phase 3: Scaffolded Analysis (27-38m)";
+                        phaseElem.className = "text-xs font-semibold text-amber-400";
+                    } else {
+                        phaseElem.textContent = "Phase 4: Portfolio Export (38-45m)";
+                        phaseElem.className = "text-xs font-semibold text-rose-400";
+                    }
+                }
+            }, 1000);
+        }
+
+        // FOCUS / SECURITY MONITOR
+        function initFocusMonitor() {
+            const statusElem = document.getElementById('focus-status');
+            window.addEventListener('blur', () => {
+                focusStrikes++;
+                statusElem.className = "flex items-center gap-1.5 px-2.5 py-1 rounded bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-mono";
+                statusElem.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span> Focus Warning (${focusStrikes} Blur Strikes)`;
+            });
+            window.addEventListener('focus', () => {
+                setTimeout(() => {
+                    statusElem.className = "flex items-center gap-1.5 px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-mono";
+                    statusElem.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Dynamic Tab Active`;
+                }, 2000);
+            });
+        }
+
+        // TAB NAVIGATION
+        function switchTab(tabKey) {
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.className = "tab-btn flex-1 py-2 rounded text-center font-bold text-slate-400 hover:text-slate-200 font-mono text-xs";
+            });
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.add('hidden');
+            });
+
+            document.getElementById(`tab-btn-${tabKey}`).className = "tab-btn flex-1 py-2 rounded text-center font-bold bg-navy-800 text-gold-400 border border-gold-500/30 font-mono text-xs";
+            document.getElementById(`tab-${tabKey}`).classList.remove('hidden');
+        }
+
+        // TEXT SELECTION & CITATION MENU
+        function initTextSelectionHandler() {
+            const reader = document.getElementById('reader-text-container');
+            const menu = document.getElementById('selection-menu');
+
+            document.addEventListener('selectionchange', () => {
+                const sel = window.getSelection();
+                if (sel.toString().trim().length > 5 && reader.contains(sel.anchorNode)) {
+                    const range = sel.getRangeAt(0);
+                    const rect = range.getBoundingClientRect();
+                    selectedTextRange = sel.toString().trim();
+                    menu.style.top = `${rect.bottom + window.scrollY + 5}px`;
+                    menu.style.left = `${Math.min(rect.left + window.scrollX, window.innerWidth - 240)}px`;
+                    menu.style.display = 'flex';
+                } else {
+                    setTimeout(() => {
+                        if (!menu.contains(document.activeElement)) {
+                            menu.style.display = 'none';
+                        }
+                    }, 200);
+                }
+            });
+        }
+
+        function addQuoteTag(category) {
+            if (!selectedTextRange) return;
+            const quoteObj = {
+                text: selectedTextRange,
+                category: category,
+                id: Date.now()
+            };
+            quoteList.push(quoteObj);
+            selectedTextRange = null;
+            document.getElementById('selection-menu').style.display = 'none';
+            window.getSelection().removeAllRanges();
+            
+            addXP(100);
+            renderQuoteList();
+            updateProjectedScore();
+            switchTab('evidence');
+        }
+
+        function renderQuoteList() {
+            const container = document.getElementById('captured-quotes-list');
+            if (quoteList.length === 0) {
+                container.innerHTML = `<div class="text-xs text-slate-300 italic p-3 bg-navy-900/40 rounded border border-navy-700/50 text-center">No quotes tagged yet. Highlight text in the reader.</div>`;
+                return;
+            }
+
+            container.innerHTML = '';
+            quoteList.forEach(q => {
+                const badgeColor = q.category === 'Explicit Evidence' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' :
+                                   q.category === 'Inference Anchor' ? 'bg-sky-500/20 text-sky-300 border-sky-500/40' :
+                                   'bg-amber-500/20 text-amber-300 border-amber-500/40';
+
+                const card = document.createElement('div');
+                card.className = "p-3 bg-navy-900 rounded-lg border border-navy-700 space-y-2 text-xs font-mono";
+                card.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <span class="px-2 py-0.5 rounded border text-[10px] font-bold ${badgeColor}">${q.category}</span>
+                        <button onclick="removeQuote(${q.id})" class="text-slate-500 hover:text-rose-400">✕</button>
+                    </div>
+                    <p class="font-serif italic text-slate-200">"${q.text}"</p>
+                    ${currentUser.tier === 1 ? `<input type="text" class="w-full bg-navy-950 border border-navy-700 rounded p-1 text-[11px] text-slate-300" placeholder="Frame: This quote shows that Equiano felt...">` : ''}
+                    ${currentUser.tier === 3 && q.category === 'Textual Ambiguity' ? `<textarea class="w-full bg-navy-950 border border-navy-700 rounded p-1 text-[11px] text-amber-200" placeholder="Ambiguity Note: Explain why Equiano leaves this unresolved..."></textarea>` : ''}
+                `;
+                container.appendChild(card);
+            });
+
+            document.getElementById('check-quotes').innerHTML = quoteList.length >= 2 ? `✅ Min. 2 Text Quotes Tagged (${quoteList.length} Tagged)` : `❌ Min. 2 Text Quotes Tagged (${quoteList.length}/2)`;
+            document.getElementById('check-quotes').className = quoteList.length >= 2 ? "flex items-center gap-2 text-emerald-400 font-bold" : "flex items-center gap-2 text-slate-400";
+        }
+
+        function removeQuote(id) {
+            quoteList = quoteList.filter(q => q.id !== id);
+            renderQuoteList();
+            updateProjectedScore();
+        }
+
+        // VOCABULARY WORKBENCH
+        function initVocabWordClickers() {
+            document.querySelectorAll('.vocab-word').forEach(el => {
+                el.addEventListener('click', () => {
+                    const word = el.getAttribute('data-word');
+                    document.getElementById('vocab-select').value = word;
+                    switchTab('vocab');
+                });
+            });
+        }
+
+        function saveVocabEntry() {
+            const word = document.getElementById('vocab-select').value;
+            const strategy = document.getElementById('vocab-strategy').value;
+            const def = document.getElementById('vocab-def').value.trim();
+            const sentence = document.getElementById('vocab-sentence').value.trim();
+
+            if (!def) {
+                alert('Please input a student definition before logging.');
+                return;
+            }
+
+            vocabList.push({ word, strategy, def, sentence, id: Date.now() });
+            document.getElementById('vocab-def').value = '';
+            document.getElementById('vocab-sentence').value = '';
+
+            addXP(50);
+            renderVocabList();
+            updateProjectedScore();
+        }
+
+        function renderVocabList() {
+            const container = document.getElementById('micro-glossary-list');
+            document.getElementById('vocab-count').textContent = vocabList.length;
+
+            if (vocabList.length === 0) {
+                container.innerHTML = `<div class="text-xs text-slate-300 italic p-3 bg-navy-900/40 rounded border border-navy-700/50 text-center">No words decoded yet.</div>`;
+                return;
+            }
+
+            container.innerHTML = '';
+            vocabList.forEach(v => {
+                const item = document.createElement('div');
+                item.className = "p-2.5 bg-navy-900 rounded border border-navy-700 text-xs font-mono space-y-1";
+                item.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-gold-400 uppercase">${v.word}</span>
+                        <span class="text-[10px] text-slate-400 bg-navy-950 px-1.5 py-0.5 rounded">${v.strategy}</span>
+                    </div>
+                    <p class="text-slate-300 font-sans">${v.def}</p>
+                    ${v.sentence ? `<p class="text-slate-400 italic text-[11px] border-l-2 border-gold-500/50 pl-2 mt-1 font-serif">"${v.sentence}"</p>` : ''}
+                `;
+                container.appendChild(item);
+            });
+
+            document.getElementById('check-vocab').innerHTML = vocabList.length >= 2 ? `✅ Min. 2 Vocabulary Words Decoded (${vocabList.length} Decoded)` : `❌ Min. 2 Vocabulary Words Decoded (${vocabList.length}/2)`;
+            document.getElementById('check-vocab').className = vocabList.length >= 2 ? "flex items-center gap-2 text-emerald-400 font-bold" : "flex items-center gap-2 text-slate-400";
+        }
+
+        function saveAnalysisResponses() {
+            const p1 = document.getElementById('prompt-1-input').value.trim();
+            const p2 = document.getElementById('prompt-2-input').value.trim();
+
+            if (p1.length > 10 && p2.length > 10) {
+                addXP(100);
+                document.getElementById('check-analysis').innerHTML = `✅ Analytical Reflections Completed`;
+                document.getElementById('check-analysis').className = "flex items-center gap-2 text-emerald-400 font-bold";
+                updateProjectedScore();
+                alert('Analysis responses saved successfully (+100 XP)!');
+            } else {
+                alert('Please provide thorough written answers for both prompts before saving.');
+            }
+        }
+
+        // GAMIFICATION & SCORE CALCULATION
+        function addXP(points) {
+            userXP += points;
+            document.getElementById('user-xp').textContent = `${userXP} XP`;
+
+            if (userXP >= 300) {
+                document.getElementById('user-level').textContent = "Scholar";
+            } else if (userXP >= 150) {
+                document.getElementById('user-level').textContent = "Historian";
+            }
+        }
+
+        function updateProjectedScore() {
+            if (!currentUser) return;
+
+            let score = currentUser.base;
+            if (vocabList.length >= 2) score += 5.0;
+            if (quoteList.length >= 2) score += 5.0;
+            if (document.getElementById('prompt-1-input').value.length > 20) score += 5.0;
+
+            score = Math.min(score, 100.0);
+            document.getElementById('metric-projected').textContent = `${score.toFixed(1)}%`;
+
+            const pct = Math.min(100, Math.max(0, ((score - currentUser.base) / (currentUser.target - currentUser.base)) * 100));
+            document.getElementById('target-progress-bar').style.width = `${pct}%`;
+        }
+
+        // JSPDF GENERATION ENGINE
+        function generatePDFPortfolio() {
+            if (!currentUser) return;
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('p', 'mm', 'a4');
+
+            // Header Banner
+            doc.setFillColor(11, 19, 43); // Navy 900
+            doc.rect(0, 0, 210, 38, 'F');
+
+            doc.setTextColor(212, 175, 55); // Gold
+            doc.setFont('times', 'bold');
+            doc.setFontSize(18);
+            doc.text('EQUILAB 1789 — EVIDENCE & VOCABULARY PORTFOLIO', 14, 16);
+
+            doc.setTextColor(255, 255, 255);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.text(`Student: ${currentUser.name} | Student ID: ${currentUser.id}`, 14, 24);
+            doc.text(`Course: 0439/01 A.Litera11 | Date: ${new Date().toLocaleDateString()} | Scaffolding Tier: ${currentUser.tier}`, 14, 30);
+
+            // Vector Drawing of Slave Ship Brookes Schematic Blueprint
+            doc.setDrawColor(58, 80, 107);
+            doc.setFillColor(248, 250, 252);
+            doc.rect(14, 44, 182, 32, 'FD');
+
+            doc.setDrawColor(11, 19, 43);
+            doc.setLineWidth(0.8);
+            // Hull outline
+            doc.ellipse(105, 60, 80, 10, 'S');
+            doc.line(25, 60, 185, 60); // Deck division line
+            // Deck compartments
+            for (let x = 35; x <= 175; x += 10) {
+                doc.line(x, 52, x, 68);
+            }
+            doc.setFont('helvetica', 'italic');
+            doc.setFontSize(8);
+            doc.setTextColor(100, 116, 139);
+            doc.text('Plan of the British Slave Ship "Brookes" (1788) — Textual Context Reference Blueprint', 16, 49);
+
+            // Personal Metrics Section
+            let y = 84;
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(11);
+            doc.setTextColor(11, 19, 43);
+            doc.text('1. SESSION METRICS & TARGET GROWTH INDICATOR', 14, y);
+            
+            y += 6;
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9.5);
+            doc.text(`Baseline Benchmark: ${currentUser.base}%    |    Session Growth Target (+15% Goal): ${currentUser.target}%`, 14, y);
+            y += 5;
+            doc.text(`Projected Session Grade: ${document.getElementById('metric-projected').textContent}    |    Focus Blur Strikes: ${focusStrikes}`, 14, y);
+
+            // Evidence Matrix Table
+            y += 10;
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(11);
+            doc.text('2. RI.11.1 EVIDENCE MATRIX (TAGGED CITATIONS)', 14, y);
+            
+            y += 6;
+            if (quoteList.length === 0) {
+                doc.setFont('helvetica', 'italic');
+                doc.setFontSize(9);
+                doc.text('No textual evidence tagged during session.', 14, y);
+                y += 6;
+            } else {
+                quoteList.forEach((q, idx) => {
+                    if (y > 250) { doc.addPage(); y = 20; }
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(9);
+                    doc.setTextColor(15, 23, 42);
+                    doc.text(`[${q.category}] Quote #${idx + 1}:`, 14, y);
+                    doc.setFont('times', 'italic');
+                    doc.setTextColor(51, 65, 85);
+                    const splitQuote = doc.splitTextToSize(`"${q.text}"`, 180);
+                    doc.text(splitQuote, 14, y + 4);
+                    y += (splitQuote.length * 4) + 6;
+                });
+            }
+
+            // Vocabulary Ledger
+            if (y > 230) { doc.addPage(); y = 20; }
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(11);
+            doc.setTextColor(11, 19, 43);
+            doc.text('3. L.11.4 STRATEGY-DRIVEN LEXICON LEDGER', 14, y);
+            
+            y += 6;
+            if (vocabList.length === 0) {
+                doc.setFont('helvetica', 'italic');
+                doc.setFontSize(9);
+                doc.text('No vocabulary decoded during session.', 14, y);
+                y += 6;
+            } else {
+                vocabList.forEach(v => {
+                    if (y > 250) { doc.addPage(); y = 20; }
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(9);
+                    doc.text(`${v.word.toUpperCase()} — Strategy: ${v.strategy}`, 14, y);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text(`Definition: ${v.def}`, 14, y + 4);
+                    y += 10;
+                });
+            }
+
+            // Written Analysis Section
+            if (y > 220) { doc.addPage(); y = 20; }
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(11);
+            doc.setTextColor(11, 19, 43);
+            doc.text('4. METACOGNITIVE SYNTHESIS & REFLECTION', 14, y);
+            
+            y += 6;
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(9);
+            doc.text('Prompt 1: Sensory Details & Hold Brutality', 14, y);
+            doc.setFont('helvetica', 'normal');
+            const p1Text = doc.splitTextToSize(document.getElementById('prompt-1-input').value || 'No response provided.', 180);
+            doc.text(p1Text, 14, y + 4);
+
+            y += (p1Text.length * 4) + 8;
+            doc.setFont('helvetica', 'bold');
+            doc.text('Prompt 2: Analysis of "Improvident Avarice" / Rhetorical Context', 14, y);
+            doc.setFont('helvetica', 'normal');
+            const p2Text = doc.splitTextToSize(document.getElementById('prompt-2-input').value || 'No response provided.', 180);
+            doc.text(p2Text, 14, y + 4);
+
+            // Save PDF
+            doc.save(`EQUILAB_1789_Portfolio_${currentUser.key}.pdf`);
+        }
+    </script>
+</body>
+</html>
